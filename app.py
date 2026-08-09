@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import re
@@ -30,7 +30,6 @@ if "user_authenticated" not in st.session_state:
 if "user_info" not in st.session_state:
     st.session_state.user_info = None
 
-# قاعدة بيانات مؤقتة لحفظ ملخصات الحساب ومنع ضياعها بالخطأ
 if "user_history" not in st.session_state:
     st.session_state.user_history = []
 
@@ -85,13 +84,6 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .history-card {
-        background-color: #F3F4F6;
-        border-right: 4px solid #10B981;
-        padding: 10px 15px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-    }
     .footer {
         width: 100%;
         background-color: #FAFAFA;
@@ -121,7 +113,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 6. شاشة تسجيل الدخول بالتفصيل (اسم الحساب + كلمة السر) ---
+# --- 6. شاشة تسجيل الدخول ---
 if not st.session_state.user_authenticated:
     st.markdown('<h1 class="main-title">📚 مرحبا بك في منصة ملخص دروس المغرب 🇲🇦</h1>', unsafe_allow_html=True)
     
@@ -173,8 +165,8 @@ else:
 
         st.markdown("---")
         
-        # --- 📁 أرشيف وملخصات المحفوظة (حفظ التلخيصات السابقة) ---
-        st.header("📜 الملخصات المحفوظة בחسابك")
+        # --- 📁 أرشيف وملخصات المحفوظة ---
+        st.header("📜 الملخصات المحفوظة بحسابك")
         if st.session_state.user_history:
             st.success(f"لديك {len(st.session_state.user_history)} ملخصات محفوظة.")
             for idx, item in enumerate(reversed(st.session_state.user_history)):
@@ -277,8 +269,8 @@ else:
                 else:
                     v_id = extract_video_id(video_url)
                     if v_id:
-                        genai.configure(api_key=final_api_key)
-                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        # إعداد العميل الخاص بـ Gemini المحدث لتفادي خطأ الـ 404
+                        client = genai.Client(api_key=final_api_key)
                         prompt_lang = "الدارجة المغربية المبسطة والتفصيلية" if "الدارجة" in language else language
 
                         with st.spinner("جاري تحليل وفهم محتوى الدرس..."):
@@ -287,12 +279,18 @@ else:
                             
                             if text:
                                 prompt = f"قم بتلخيص هذا الدرس الشامل بالكامل وبطريقة مبسطة يفهمها التلميذ بـ ({prompt_lang}) وبأسلوب ({summary_type}):\n\n{text}"
-                                response = model.generate_content(prompt)
+                                response = client.models.generate_content(
+                                    model='gemini-2.5-flash',
+                                    contents=prompt,
+                                )
                                 res_text = response.text
                             else:
                                 prompt = f"أنا أعطيك رابط درس من يوتيوب: {video_url}\nقم بتلخيص وشرح موضوع هذا الدرس بالتفصيل وبأسلوب مبسط جداً بـ ({prompt_lang})، محدداً النقاط الأساسية والشرح المطلوب للتمارين والدروس المغربية."
                                 try:
-                                    response = model.generate_content(prompt)
+                                    response = client.models.generate_content(
+                                        model='gemini-2.5-flash',
+                                        contents=prompt,
+                                    )
                                     res_text = response.text
                                 except Exception as e:
                                     st.error(f"حدث خطأ أثناء المعالجة: {e}")
@@ -325,7 +323,7 @@ else:
                     st.error("يرجى إدخال رابط فيديو صحيح أولاً.")
 
     with col_vid2:
-        st.info("💡 **مميزات المنصة:**\n1. **حفظ محلي فوري** لجميع ملخصاتك في القائمة الجانبية (3 أشرطة بالاكود).\n2. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
+        st.info("💡 **مميزات المنصة:**\n1. **حفظ محلي فوري** لجميع ملخصاتك في القائمة الجانبية.\n2. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
 
     # --- تحليل صورة الفرض ---
     if btn_analyze:
@@ -336,8 +334,7 @@ else:
         else:
             with st.spinner("جاري قراءة الفرض واستخراج جميع الأسئلة وحلها..."):
                 try:
-                    genai.configure(api_key=final_api_key)
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    client = genai.Client(api_key=final_api_key)
                     img = Image.open(uploaded_image)
 
                     context = ""
@@ -346,7 +343,11 @@ else:
 
                     prompt_lang = "الدارجة المغربية" if "الدارجة" in language else language
                     full_prompt = f"{image_prompt}\nقم بالشرح والحل بـ ({prompt_lang}).\n{context}"
-                    response = model.generate_content([full_prompt, img])
+                    
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=[full_prompt, img]
+                    )
 
                     st.markdown("---")
                     st.subheader("📝 نتائج تحليل الفرض وإجابة جميع الأسئلة")
@@ -356,7 +357,7 @@ else:
                     with col_res2:
                         st.markdown(response.text)
                     
-                    # حفظ التحلل في تاريخ الحساب
+                    # حفظ التحليل في تاريخ الحساب
                     current_time = datetime.now().strftime("%H:%M - %Y/%m/%d")
                     st.session_state.user_history.append({
                         "title": f"حل فرض/صورة",
