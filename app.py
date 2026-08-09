@@ -19,19 +19,21 @@ st.set_page_config(
 # --- 2. الإعدادات السريّة للمفتاح تلقائياً ---
 api_key_secret = st.secrets.get("GEMINI_API_KEY", "")
 
-# --- 3. إدارة الجلسة والبيانات ---
+# --- 3. إدارة الجلسة وقاعدة البيانات البسيطة ---
 if "visitor_count" not in st.session_state:
     st.session_state.visitor_count = 125
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 if "user_authenticated" not in st.session_state:
     st.session_state.user_authenticated = False
-if "user_info" not in st.session_state:
-    st.session_state.user_info = None
-if "user_history" not in st.session_state:
-    st.session_state.user_history = []
-if "gallery_permission" not in st.session_state:
-    st.session_state.gallery_permission = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
+
+# قاعدة بيانات للمستخدمين وحفظ ملخصات كل حساب
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {
+        "mohamed": {"pass": "123456", "history": []}
+    }
 
 st.session_state.visitor_count += 1
 
@@ -112,64 +114,81 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 6. شاشة تسجيل الدخول ---
+# --- 6. نظام تسجيل وتأسيس الحسابات المحفوظة ---
 if not st.session_state.user_authenticated:
     st.markdown('<h1 class="main-title">📚 منصة ملخص دروس المغرب الذكية 🇲🇦</h1>', unsafe_allow_html=True)
     
-    st.markdown("""
-        <div class="custom-card" style="max-width: 480px; margin: 0 auto; text-align: center;">
-            <h3 style="color: #38bdf8;">🔐 تسجيل الدخول للحساب</h3>
-            <p style="color: #94a3b8; font-size: 14px;">أدخل معلومات حسابك للوصول للملخصات وحفظ الملفات تلقائياً.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
     col_acc1, col_acc2, col_acc3 = st.columns([1, 2, 1])
     with col_acc2:
-        tab_google, tab_apple = st.tabs(["🌐 حساب Google", "🍏 حساب iCloud / Apple"])
+        tab_login, tab_signup = st.tabs(["🔐 تسجيل الدخول", "✨ إنشاء حساب جديد"])
         
-        with tab_google:
-            username = st.text_input("اسم الحساب / البريد الإلكتروني:", key="g_user")
-            password = st.text_input("كلمة السر:", type="password", key="g_pass")
-            if st.button("دخول للحساب", type="primary", use_container_width=True):
-                if username and len(password) >= 4:
-                    st.session_state.user_authenticated = True
-                    st.session_state.user_info = {"type": "Google", "username": username}
-                    st.rerun()
+        with tab_login:
+            st.markdown("<h4 style='text-align: center; color: #38bdf8;'>تسجيل الدخول لحسابك</h4>", unsafe_allow_html=True)
+            user_in = st.text_input("اسم المستخدم / البريد الإلكتروني:", key="login_user")
+            pass_in = st.text_input("كلمة السر:", type="password", key="login_pass")
+            
+            if st.button("دخول", type="primary", use_container_width=True):
+                user_clean = user_in.strip().lower()
+                if user_clean in st.session_state.users_db:
+                    if st.session_state.users_db[user_clean]["pass"] == pass_in:
+                        st.session_state.user_authenticated = True
+                        st.session_state.current_user = user_clean
+                        st.success("تم تسجيل الدخول بنجاح!")
+                        st.rerun()
+                    else:
+                        st.error("❌ كلمة السر غير صحيحة! يرجى التأكد وإعادة المحاولة.")
                 else:
-                    st.error("يرجى إدخال اسم الحساب وكلمة سر مكونة من 4 أحرف/أرقام على الأقل.")
-                    
-        with tab_apple:
-            apple_id = st.text_input("اسم حساب Apple ID / iCloud:", key="a_user")
-            apple_pass = st.text_input("كلمة السر:", type="password", key="a_pass")
-            if st.button("دخول بـ Apple ID", use_container_width=True):
-                if apple_id and len(apple_pass) >= 4:
-                    st.session_state.user_authenticated = True
-                    st.session_state.user_info = {"type": "iCloud", "username": apple_id}
-                    st.rerun()
+                    st.error("❌ هذا الحساب غير موجود! يمكنك إنشاء حساب جديد من التبويب المجاور.")
+
+        with tab_signup:
+            st.markdown("<h4 style='text-align: center; color: #38bdf8;'>إنشاء حساب جديد</h4>", unsafe_allow_html=True)
+            new_user = st.text_input("اختر اسم المستخدم / البريد:", key="new_user")
+            new_pass = st.text_input("اختر كلمة السر:", type="password", key="new_pass")
+            confirm_pass = st.text_input("تأكيد كلمة السر:", type="password", key="conf_pass")
+            
+            if st.button("إنشاء الحساب 🚀", use_container_width=True):
+                user_clean = new_user.strip().lower()
+                if not user_clean or not new_pass:
+                    st.warning("⚠️ يرجى ملء كافة البيانات.")
+                elif len(new_pass) < 4:
+                    st.warning("⚠️ كلمة السر يجب أن تتكون من 4 رموز على الأقل.")
+                elif new_pass != confirm_pass:
+                    st.error("❌ كلمتا السر غير متطابقتين.")
+                elif user_clean in st.session_state.users_db:
+                    st.error("❌ اسم المستخدم هذا مستعمل من قبل، اختر اسماً آخر.")
                 else:
-                    st.error("يرجى إدخال البيانات بالشكل الصحيح.")
+                    st.session_state.users_db[user_clean] = {
+                        "pass": new_pass,
+                        "history": []
+                    }
+                    st.session_state.user_authenticated = True
+                    st.session_state.current_user = user_clean
+                    st.success("✅ تم إنشاء الحساب بنجاح ودخولك للمنصة!")
+                    st.rerun()
 
 # --- 7. التطبيق الرئيسي بعد الدخول ---
 else:
+    current_u = st.session_state.current_user
+    user_data = st.session_state.users_db[current_u]
+
     with st.sidebar:
-        st.write(f"👤 مرحباً: **{st.session_state.user_info['username']}**")
-        st.caption(f"نوع الحساب: {st.session_state.user_info['type']}")
+        st.write(f"👤 مرحباً: **{current_u}**")
         
         if st.button("تسجيل الخروج 🚪", use_container_width=True):
             st.session_state.user_authenticated = False
-            st.session_state.user_info = None
+            st.session_state.current_user = None
             st.rerun()
 
         st.markdown("---")
         
-        st.header("📜 الملخصات المحفوظة")
-        if st.session_state.user_history:
-            st.success(f"لديك {len(st.session_state.user_history)} ملخصات محفوظة.")
-            for idx, item in enumerate(reversed(st.session_state.user_history)):
+        st.header("📜 الملخصات والحلول المحفوظة")
+        if user_data["history"]:
+            st.success(f"لديك {len(user_data['history'])} عمليات محفوظة.")
+            for idx, item in enumerate(reversed(user_data["history"])):
                 with st.expander(f"📌 {item['title']} ({item['time']})"):
                     st.markdown(item['content'])
         else:
-            st.info("لا توجد ملخصات محفوظة بعد. كل عمل تقوم به سيحفظ هنا لمنع ضياعه!")
+            st.info("لا توجد عمليات محفوظة بعد. كل ملخص أو حل سيتخزن هنا لحسابك!")
 
         st.markdown("---")
         st.header("⚙️ إعدادات المفتاح والمدير")
@@ -206,7 +225,7 @@ else:
             st.metric(label="🏦 حالة الحساب البنكي", value="جاهز 🟢")
         st.markdown("---")
 
-    st.markdown('<h1 class="main-title">📚 منصة التلخيص وطرح الأسئلة الذكية 🇲🇦</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">📚 منصة التلخيص وحل الفروض الذكية 🇲🇦</h1>', unsafe_allow_html=True)
 
     def extract_pdf_text(uploaded_file):
         pdf_reader = pypdf.PdfReader(uploaded_file)
@@ -215,46 +234,14 @@ else:
             text += page.extract_text() or ""
         return text
 
-    tab_media, tab_yt = st.tabs(["📄 رفع صور / ملفات PDF / صور المعرض", "🎥 تلخيص فيديوهات اليوتيوب"])
+    tab_media, tab_yt = st.tabs(["📄 رفع صور الدرس أو الفروض / ملفات PDF", "🎥 تلخيص فيديوهات اليوتيوب"])
 
     with tab_media:
-        st.subheader("📸 رفع الدرس (صور أو PDF) وطرح الأسئلة")
-        
-        st.markdown("##### 📱 إذن المعرض والكتالوج:")
-        col_perm1, col_perm2 = st.columns([3, 1])
-        with col_perm1:
-            st.caption("يتطلب اختيار الصور المباشرة منح الإذن للوصول لمكتبة الصور داخل هاتفك.")
-        with col_perm2:
-            if st.button("🔓 منح إذن الوصول للصور"):
-                st.session_state.gallery_permission = True
-                st.success("تم إعطاء الإذن بنجاح! يمكنك الآن اختيار الصور.")
+        st.subheader("📸 اختيار العملية ورفع المرفقات")
 
-        st.markdown("---")
-
-        col_up1, col_up2 = st.columns(2)
-        
-        uploaded_images = []
-        uploaded_pdf_text = ""
-
-        with col_up1:
-            st.markdown("🖼️ **رفع صور الدرس / الفرض:**")
-            files_img = st.file_uploader("اختر صورة أو مجموعة صور من هاتفك:", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-            if files_img:
-                for f in files_img:
-                    uploaded_images.append(Image.open(f))
-                st.success(f"تم تحميل {len(uploaded_images)} صورة بنجاح!")
-
-        with col_up2:
-            st.markdown("📄 **رفع ملف الدرس (PDF):**")
-            file_pdf = st.file_uploader("اختر ملف PDF للدرس:", type=["pdf"])
-            if file_pdf:
-                uploaded_pdf_text = extract_pdf_text(file_pdf)
-                st.success("تم قراءة واستخراج نص ملف الـ PDF بنجاح!")
-
-        st.markdown("---")
-
+        # ترتيب الواجهة: تحديد نوع العملية أولاً
         action_type = st.radio(
-            "🎯 ماذا تريد أن تفعل بالملفات والصور المرفقة؟",
+            "🎯 ماذا تريد أن تفعل؟ (اختر نوع العملية أولاً):",
             [
                 "🚀 تلخيص شامل للمحتوى بالكامل",
                 "❓ طرح سؤال محدد وحله من الصور/الملف",
@@ -266,13 +253,38 @@ else:
         if action_type == "❓ طرح سؤال محدد وحله من الصور/الملف":
             user_query = st.text_area("✍️ اكتب سؤالك هنا بالتفصيل ليتم إجابته واستخراجه من المرفقات:")
 
+        st.markdown("---")
+
+        # خانات تحميل الملفات والصور
+        col_up1, col_up2 = st.columns(2)
+        
+        uploaded_images = []
+        uploaded_pdf_text = ""
+
+        with col_up1:
+            st.markdown("🖼️ **رفع صور (الدرس / الفرض / التمارين):**")
+            files_img = st.file_uploader("اختر صور الفرض أو الدرس من هاتفك:", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+            if files_img:
+                for f in files_img:
+                    uploaded_images.append(Image.open(f))
+                st.success(f"تم تحميل {len(uploaded_images)} صورة بنجاح!")
+
+        with col_up2:
+            st.markdown("📄 **رفع ملف (PDF):**")
+            file_pdf = st.file_uploader("اختر ملف PDF للدرس أو الفرض:", type=["pdf"])
+            if file_pdf:
+                uploaded_pdf_text = extract_pdf_text(file_pdf)
+                st.success("تم قراءة واستخراج نص ملف الـ PDF بنجاح!")
+
+        st.markdown("---")
+
         if st.button("✨ تنفيذ العملية الآن", type="primary", use_container_width=True):
             if not final_api_key:
                 st.error("⚠️ يرجى إدخال API Key في القائمة الجانبية أولاً.")
             elif not uploaded_images and not uploaded_pdf_text:
                 st.warning("⚠️ يرجى رفع صورة واحدة على الأقل أو ملف PDF للبدء.")
             else:
-                with st.spinner("جاري التحليل واستخراج الإجابات..."):
+                with st.spinner("جاري التحليل والحل بكفاءة عالية..."):
                     try:
                         client = genai.Client(api_key=final_api_key)
                         prompt_lang = "الدارجة المغربية المبسطة" if "الدارجة" in language else language
@@ -291,8 +303,9 @@ else:
                         if uploaded_images:
                             contents_payload.extend(uploaded_images)
 
+                        # تم التحديث إلى الموديل الرسمي المستقر gemini-1.5-flash
                         response = client.models.generate_content(
-                            model='gemini-2.5-flash',
+                            model='gemini-1.5-flash',
                             contents=contents_payload
                         )
 
@@ -300,7 +313,7 @@ else:
                         st.markdown(response.text)
 
                         current_time = datetime.now().strftime("%H:%M - %Y/%m/%d")
-                        st.session_state.user_history.append({
+                        user_data["history"].append({
                             "title": action_type,
                             "time": current_time,
                             "content": response.text
@@ -338,8 +351,9 @@ else:
                             else:
                                 prompt = f"أنا أعطيك رابط درس يوتيوب: {video_url}\nقم بتلخيص وشرح هذا الدرس بـ ({prompt_lang})."
 
+                            # تم التحديث إلى الموديل الرسمي المستقر gemini-1.5-flash
                             response = client.models.generate_content(
-                                model='gemini-2.5-flash',
+                                model='gemini-1.5-flash',
                                 contents=prompt
                             )
 
@@ -347,7 +361,7 @@ else:
                             st.markdown(response.text)
 
                             current_time = datetime.now().strftime("%H:%M - %Y/%m/%d")
-                            st.session_state.user_history.append({
+                            user_data["history"].append({
                                 "title": f"فيديو يوتيوب ({v_id})",
                                 "time": current_time,
                                 "content": response.text
