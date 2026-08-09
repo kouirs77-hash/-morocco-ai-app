@@ -1,69 +1,245 @@
 import streamlit as st
 import google.generativeai as genai
-import tempfile
-import os
+from youtube_transcript_api import YouTubeTranscriptApi
+from PIL import Image
+import re
 
-st.set_page_config(page_title="المساعد الدراسي الذكي", page_icon="🎓", layout="centered")
+# --- 🗝️ كلمة السر الخاصة بالأدمن (يمكنك تغييرها) ---
+ADMIN_PASSWORD = "mohamed_kouirs_2026"
 
-st.title("🎓 المساعد الدراسي المغربي")
-st.caption("رفع الفيديوهات + تلخيص + حل التمارين بالذكاء الاصطناعي")
-
-api_key = st.text_input("🔑 أدخل مفتاح Gemini API:", type="password")
-
-if api_key:
-    genai.configure(api_key=api_key)
-
-subjects = [
-    "الرياضيات", "الفيزياء والكيمياء", "علوم الحياة والأرض",
-    "اللغة العربية", "اللغة الفرنسية", "اللغة الإنجليزية",
-    "الفلسفة", "التاريخ والجغرافيا", "التربية الإسلامية"
-]
-selected_subject = st.selectbox("📚 اختر المادة الدراسية:", subjects)
-
-uploaded_files = st.file_uploader(
-    "🎥 اختر فيديوهات الدرس من هاتفك:", 
-    type=["mp4", "mov", "mkv"], 
-    accept_multiple_files=True
+# --- 1. إعدادات الصفحة ---
+st.set_page_config(
+    page_title="ملخص دروس المغرب",
+    page_icon="🇲🇦",
+    layout="wide"
 )
 
-if "videos_ref" not in st.session_state:
-    st.session_state.videos_ref = []
+# --- 2. إدارة الجلسة والزوار ---
+if "visitor_count" not in st.session_state:
+    st.session_state.visitor_count = 125  # عداد الزوار التراكمي
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+if "videos_list" not in st.session_state:
+    st.session_state.videos_list = []
 
-if uploaded_files and api_key:
-    if st.button("⚡ تحليل الفيديوهات"):
-        with st.spinner("جاري رفع وتحليل الفيديو... قد يستغرق ذلك لحظات"):
-            st.session_state.videos_ref = []
-            for file in uploaded_files:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-                    tmp.write(file.read())
-                    tmp_path = tmp.name
-                
-                video_data = genai.upload_file(path=tmp_path)
-                st.session_state.videos_ref.append(video_data)
-                os.remove(tmp_path)
-                
-            st.success("✅ تم تحليل الفيديوهات بنجاح!")
+st.session_state.visitor_count += 1
 
-if st.session_state.videos_ref:
-    st.markdown("---")
-    action = st.radio("ماذا تريد أن تفعل؟", ["📝 تلخيص الدرس", "❓ حل تمارين وأسئلة"])
+# --- 3. تصميم CSS المطابق للواجهة ---
+st.markdown("""
+    <style>
+    .top-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 5px 15px;
+        background-color: #FFFFFF;
+        border-bottom: 1px solid #E5E7EB;
+        margin-bottom: 15px;
+    }
+    .header-logo {
+        width: 45px;
+    }
+    .main-title {
+        text-align: center;
+        color: #000000;
+        font-weight: bold;
+        font-size: 1.8rem;
+        margin-bottom: 15px;
+    }
+    .admin-dashboard {
+        background-color: #EBF8FF;
+        border: 2px solid #3182CE;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .ad-box {
+        background-color: #FFFBEB;
+        border: 1px dashed #D97706;
+        text-align: center;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 10px 0;
+        font-size: 14px;
+        color: #92400E;
+    }
+    .footer {
+        width: 100%;
+        background-color: #FAFAFA;
+        text-align: center;
+        padding: 20px 0;
+        margin-top: 40px;
+        border-top: 1px solid #EEEEEE;
+    }
+    .footer-title {
+        font-size: 22px;
+        font-weight: bold;
+        color: #000000;
+        margin-bottom: 5px;
+    }
+    .footer-sub {
+        font-size: 12px;
+        color: #6B7280;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 4. الهيدر العلوي ---
+st.markdown("""
+    <div class="top-header">
+        <div style="font-size: 20px;">🔔</div>
+        <div><img src="https://upload.wikimedia.org/wikipedia/commons/d/d1/Coat_of_arms_of_Morocco.svg" class="header-logo"></div>
+    </div>
+""", unsafe_allow_html=True)
+
+# --- 5. القائمة الجانبية ---
+with st.sidebar:
+    st.header("⚙️ الإعدادات")
     
-    model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+    admin_input = st.text_input("🔑 دخول الأدمن (كلمة السر):", type="password")
+    if admin_input == ADMIN_PASSWORD:
+        st.session_state.is_admin = True
+        st.success("👑 مرحباً بك يا محمد (وضع المدير مفعل)")
+    else:
+        st.session_state.is_admin = False
 
-    if action == "📝 تلخيص الدرس":
-        if st.button("إنشاء التلخيص"):
-            with st.spinner("جاري كتابة الملخص..."):
-                prompt = f"قم بتلخيص جميع الدروس الموجودة في هذه الفيديوهات لمادة {selected_subject} بأسلوب محدد ومنظم باللغة العربية."
-                res = model.generate_content([prompt, *st.session_state.videos_ref])
-                st.markdown("### 📄 الملخص:")
-                st.write(res.text)
+    st.markdown("---")
+    api_key = st.text_input("أدخل GEMINI API KEY:", type="password")
+    st.markdown("[كيف تحصل على مفتاح API؟](https://aistudio.google.com/)")
+    
+    language = st.selectbox("🎯 لغة التلخيص:", ["العربية", "الفرنسية", "الإنجليزية"])
+    summary_type = st.selectbox("📝 نوع التلخيص:", ["ملخص شامل وتفصيلي", "نقاط رئيسية وسريعة", "أسئلة وإجابات"])
 
-    elif action == "❓ حل تمارين وأسئلة":
-        user_q = st.text_area("أكتب التمرين هنا (أو صورته ونصه):")
-        if st.button("إرسال الحل"):
-            if user_q:
-                with st.spinner("جاري استخراج الحل من الفيديوهات..."):
-                    prompt = f"أنت أستاذ مادة {selected_subject}. أجب على التمرين التالي اعتماداً فقط على الشرح الموجود بالفيديوهات المرفقة:\n{user_q}"
-                    res = model.generate_content([prompt, *st.session_state.videos_ref])
-                    st.markdown("### 🎯 الحل:")
-                    st.write(res.text)
+    st.markdown("---")
+    st.header("🖼️ الوصول للصور (الفرض التجريبي)")
+    uploaded_image = st.file_uploader("قم برفع صورة الفرض أو التمرين:", type=["png", "jpg", "jpeg"])
+    image_prompt = st.text_area(
+        "التعليمات:",
+        value="استخرج جميع الأسئلة والتمارين المكتوبة في الصورة وأجب عليها بالكامل إجابة نموذجية معتمدًا على الفيديوهات المرفقة."
+    )
+    btn_analyze = st.button("🔍 تحليل الصورة وحل الفرض كامل", use_container_width=True)
+
+# --- 6. لوحة التحكم المخصصة لك ---
+if st.session_state.is_admin:
+    st.markdown("""
+    <div class="admin-dashboard">
+        <h3 style="margin:0; color:#2B6CB0;">👑 لوحة تحكم المالك: محمد كويرس</h3>
+        <p style="margin:5px 0 15px 0; font-size:14px; color:#4A5568;">✨ أنت تتصفح الموقع حالياً بوضع الأدمن (بدون إعلانات).</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_adm1, col_adm2, col_adm3 = st.columns(3)
+    with col_adm1:
+        st.metric(label="👥 عدد زوار الموقع", value=f"{st.session_state.visitor_count} زائر")
+    with col_adm2:
+        estimated_earnings = round(st.session_state.visitor_count * 0.008, 2)
+        st.metric(label="💰 أرباح مشاهدة الإعلانات", value=f"${estimated_earnings} USD")
+    with col_adm3:
+        st.metric(label="🏦 نقل الأموال للحساب البنكي", value="جاهز للسحب 🟢")
+
+    st.info("💡 **طريقة نقل الأموال لأرض الواقع:** يتم تحويل الأرباح من شبكة الإعلانات (مثل Google AdSense) مباشرة إلى حسابك البنكي عند الوصول للحد الأدنى للسحب.")
+    st.markdown("---")
+
+# --- 7. الإعلانات (تظهر للزوار فقط) ---
+if not st.session_state.is_admin:
+    st.markdown('<div class="ad-box">📢 مساحة إعلانية (Google AdSense) - تظهر للزوار العاديين فقط</div>', unsafe_allow_html=True)
+
+# --- 8. الواجهة الرئيسية ---
+st.markdown('<h1 class="main-title">📚 تلخيص الدروس والفيديوهات</h1>', unsafe_allow_html=True)
+
+def extract_video_id(url):
+    regex = r"(?:v=|\/([0-9A-Za-z_-]{11}).*[\?&]v=]|youtu\.be\/)([^"&"\?\/]+)"
+    match = re.search(regex, url)
+    return match.group(2) or match.group(1) if match else None
+
+def get_transcript(video_id):
+    try:
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['ar', 'fr', 'en'])
+        return " ".join([i['text'] for i in transcript_list])
+    except Exception:
+        return None
+
+col_vid1, col_vid2 = st.columns([2, 1])
+
+with col_vid1:
+    video_url = st.text_input("🔗 أدخل رابط فيديو اليوتيوب للحصول على ملخص شامل ومساعد للدراسة:", placeholder="رابط فيديو اليوتيوب")
+    
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("🚀 ملخص الدرس", type="primary", use_container_width=True):
+            if not api_key:
+                st.error("يرجى إدخال API Key في القائمة الجانبية.")
+            elif not video_url:
+                st.warning("يرجى إدخال رابط الفيديو.")
+            else:
+                v_id = extract_video_id(video_url)
+                if v_id:
+                    with st.spinner("جاري التلخيص..."):
+                        text = get_transcript(v_id)
+                        if text:
+                            try:
+                                genai.configure(api_key=api_key)
+                                model = genai.GenerativeModel('gemini-1.5-flash')
+                                prompt = f"قم بتلخيص الفيديو بلغة {language} وبأسلوب {summary_type}:\n{text}"
+                                response = model.generate_content(prompt)
+                                st.success("✅ تم التلخيص بنجاح!")
+                                st.markdown(response.text)
+                            except Exception as e:
+                                st.error(f"خطأ: {e}")
+                        else:
+                            st.error("تعذر استخراج النص من هذا الفيديو.")
+                else:
+                    st.error("رابط غير صحيح.")
+
+    with col_btn2:
+        if st.button("➕ حفظ الفيديو للتحليل مع الصورة", use_container_width=True):
+            v_id = extract_video_id(video_url)
+            if v_id:
+                text = get_transcript(v_id)
+                if text:
+                    st.session_state.videos_list.append(text)
+                    st.success(f"تمت إضافة الفيديو! الإجمالي: {len(st.session_state.videos_list)} فيديو.")
+
+    if st.session_state.videos_list:
+        st.caption(f"📌 الفيديوهات المخزنة في الجلسة: {len(st.session_state.videos_list)}")
+
+with col_vid2:
+    st.info("💡 **كيف تعمل المنصة؟**\n1. ضع رابط فيديو للتلخيص السريع.\n2. أو قم بإضافة فيديوهات متعددة وافتح القائمة الجانبية لرفع صورة الفرض التجريبي ليقوم الذكاء الاصطناعي بإجابتها بالكامل.")
+
+# --- 9. تحليل صورة الفرض ---
+if btn_analyze:
+    if not api_key:
+        st.error("⚠️ يرجى أدخال API Key في القائمة الجانبية أولاً.")
+    elif not uploaded_image:
+        st.warning("⚠️ يرجى رفع صورة الفرض التجريبي من القائمة الجانبية.")
+    else:
+        with st.spinner("جاري قراءة الفرض واستخراج جميع الأسئلة وحلها..."):
+            try:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                img = Image.open(uploaded_image)
+
+                context = ""
+                if st.session_state.videos_list:
+                    context = "\n\nالمعطيات المأخوذة من فيديوهات الدروس المرفقة:\n" + "\n--- فيديو جديد ---\n".join([v[:3000] for v in st.session_state.videos_list])
+
+                full_prompt = f"{image_prompt}\n{context}"
+                response = model.generate_content([full_prompt, img])
+
+                st.markdown("---")
+                st.subheader("📝 نتائج تحليل الفرض وإجابة جميع الأسئلة")
+                col_res1, col_res2 = st.columns([1, 2])
+                with col_res1:
+                    st.image(img, caption="صورة الفرض المرفوع", use_column_width=True)
+                with col_res2:
+                    st.markdown(response.text)
+            except Exception as e:
+                st.error(f"حدث خطأ: {e}")
+
+# --- 10. الحقوق في الأسفل ---
+st.markdown("""
+    <div class="footer">
+        <div class="footer-title">صنع من طرف محمد كويرس</div>
+        <div class="footer-sub">© 2024 جميع الحقوق محفوظة لملخص دروس المغرب</div>
+    </div>
+""", unsafe_allow_html=True)
