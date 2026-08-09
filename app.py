@@ -35,16 +35,13 @@ if "gallery_permission" not in st.session_state:
 
 st.session_state.visitor_count += 1
 
-# --- 4. تصميم ألوان حديث وجذاب (Modern Dynamic UI) ---
+# --- 4. تصميم ألوان حديث وجذاب ---
 st.markdown("""
     <style>
-    /* خلفية متناسقة وألوان جذابة */
     .stApp {
         background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
         color: #f8fafc;
     }
-    
-    /* الهيدر العلوي */
     .top-header {
         display: flex;
         justify-content: space-between;
@@ -60,8 +57,6 @@ st.markdown("""
         width: 50px;
         filter: drop-shadow(0px 0px 8px rgba(255, 215, 0, 0.5));
     }
-    
-    /* العناوين والبطاقات */
     .main-title {
         text-align: center;
         background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
@@ -71,7 +66,6 @@ st.markdown("""
         font-size: 2.2rem;
         margin-bottom: 20px;
     }
-    
     .custom-card {
         background: rgba(30, 41, 59, 0.6);
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -80,7 +74,6 @@ st.markdown("""
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
         margin-bottom: 20px;
     }
-    
     .admin-dashboard {
         background: linear-gradient(135deg, rgba(14, 165, 233, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
         border: 1px solid #38bdf8;
@@ -88,8 +81,6 @@ st.markdown("""
         padding: 20px;
         margin-bottom: 20px;
     }
-    
-    /* الأزرار المصممة بألوان جذابة */
     .stButton>button {
         border-radius: 12px !important;
         background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%) !important;
@@ -103,7 +94,6 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 6px 20px 0 rgba(168, 85, 247, 0.6) !important;
     }
-
     .footer {
         text-align: center;
         padding: 25px 0;
@@ -161,7 +151,6 @@ if not st.session_state.user_authenticated:
 
 # --- 7. التطبيق الرئيسي بعد الدخول ---
 else:
-    # --- القائمة الجانبية (3 أشرطة / Sidebar) ---
     with st.sidebar:
         st.write(f"👤 مرحباً: **{st.session_state.user_info['username']}**")
         st.caption(f"نوع الحساب: {st.session_state.user_info['type']}")
@@ -173,7 +162,6 @@ else:
 
         st.markdown("---")
         
-        # --- 📁 أرشيف الملخصات المحفوظة ---
         st.header("📜 الملخصات المحفوظة")
         if st.session_state.user_history:
             st.success(f"لديك {len(st.session_state.user_history)} ملخصات محفوظة.")
@@ -200,7 +188,6 @@ else:
         
         language = st.selectbox("🎯 لغة الشرح والرد:", ["الدارجة المغربية 🇲🇦", "العربية الفصحى 🇲🇦", "الفرنسية 🇫🇷", "الإنجليزية 🇬🇧"])
 
-    # --- لوحة الأدمن ---
     if st.session_state.is_admin:
         st.markdown("""
         <div class="admin-dashboard">
@@ -219,10 +206,8 @@ else:
             st.metric(label="🏦 حالة الحساب البنكي", value="جاهز 🟢")
         st.markdown("---")
 
-    # --- الواجهة الرئيسية ---
     st.markdown('<h1 class="main-title">📚 منصة التلخيص وطرح الأسئلة الذكية 🇲🇦</h1>', unsafe_allow_html=True)
 
-    # دالة استخراج النص من PDF
     def extract_pdf_text(uploaded_file):
         pdf_reader = pypdf.PdfReader(uploaded_file)
         text = ""
@@ -230,14 +215,11 @@ else:
             text += page.extract_text() or ""
         return text
 
-    # تقسيم الصفحة إلى تبويبات احترافية
     tab_media, tab_yt = st.tabs(["📄 رفع صور / ملفات PDF / صور المعرض", "🎥 تلخيص فيديوهات اليوتيوب"])
 
-    # === التبويب الأول: رفع الصور والملفات والأسئلة ===
     with tab_media:
         st.subheader("📸 رفع الدرس (صور أو PDF) وطرح الأسئلة")
         
-        # طلب الإذن للوصول لصور الهاتف
         st.markdown("##### 📱 إذن المعرض والكتالوج:")
         col_perm1, col_perm2 = st.columns([3, 1])
         with col_perm1:
@@ -271,7 +253,6 @@ else:
 
         st.markdown("---")
 
-        # خيار العمل: تلخيص أم سؤال؟
         action_type = st.radio("🎯 ماذا تريد أن تفعل بالملفات والصور المرفقة؟", ["🚀 تلخيص شامل للمحتوى بالكامل", "❓ طرح سؤال محدد وحله من الصور/الملف"])
 
         user_query = ""
@@ -309,7 +290,6 @@ else:
                         st.success("✅ تم إنجاز العملية بنجاح!")
                         st.markdown(response.text)
 
-                        # حفظ في السجل
                         current_time = datetime.now().strftime("%H:%M - %Y/%m/%d")
                         st.session_state.user_history.append({
                             "title": "تحليل صور / PDF / أسئلة",
@@ -320,7 +300,6 @@ else:
                     except Exception as e:
                         st.error(f"حدث خطأ أثناء المعالجة: {e}")
 
-    # === التبويب الثاني: اليوتيوب ===
     with tab_yt:
         st.subheader("🎥 تلخيص فيديوهات اليوتيوب")
         video_url = st.text_input("🔗 أدخل رابط فيديو اليوتيوب:", placeholder="https://www.youtube.com/watch?v=...")
@@ -339,7 +318,6 @@ else:
 
                     with st.spinner("جاري تحليل وفهم الفيديو..."):
                         try:
-                            # محاولة جلب النص
                             try:
                                 transcript_list = YouTubeTranscriptApi.get_transcript(v_id)
                                 text = " ".join([i['text'] for i in transcript_list])
@@ -368,7 +346,6 @@ else:
                         except Exception as e:
                             st.error(f"حدث خطأ: {e}")
 
-# --- 8. الحقوق والذيل ---
 st.markdown("""
     <div class="footer">
         <div>صنع بكل حب من طرف <b>محمد كويرس</b></div>
