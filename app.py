@@ -239,7 +239,6 @@ else:
     with tab_media:
         st.subheader("📸 اختيار العملية ورفع المرفقات")
 
-        # ترتيب الواجهة: تحديد نوع العملية أولاً
         action_type = st.radio(
             "🎯 ماذا تريد أن تفعل؟ (اختر نوع العملية أولاً):",
             [
@@ -255,7 +254,6 @@ else:
 
         st.markdown("---")
 
-        # خانات تحميل الملفات والصور
         col_up1, col_up2 = st.columns(2)
         
         uploaded_images = []
@@ -303,11 +301,17 @@ else:
                         if uploaded_images:
                             contents_payload.extend(uploaded_images)
 
-                        # تم التحديث إلى الموديل الرسمي المستقر gemini-1.5-flash
-                        response = client.models.generate_content(
-                            model='gemini-1.5-flash',
-                            contents=contents_payload
-                        )
+                        # محاولة طلب النماذج المتاحة تلقائياً لتجنب مشكلة 404
+                        try:
+                            response = client.models.generate_content(
+                                model='gemini-1.5-flash',
+                                contents=contents_payload
+                            )
+                        except Exception:
+                            response = client.models.generate_content(
+                                model='models/gemini-1.5-flash',
+                                contents=contents_payload
+                            )
 
                         st.success("✅ تم إنجاز العملية بنجاح!")
                         st.markdown(response.text)
@@ -351,11 +355,16 @@ else:
                             else:
                                 prompt = f"أنا أعطيك رابط درس يوتيوب: {video_url}\nقم بتلخيص وشرح هذا الدرس بـ ({prompt_lang})."
 
-                            # تم التحديث إلى الموديل الرسمي المستقر gemini-1.5-flash
-                            response = client.models.generate_content(
-                                model='gemini-1.5-flash',
-                                contents=prompt
-                            )
+                            try:
+                                response = client.models.generate_content(
+                                    model='gemini-1.5-flash',
+                                    contents=prompt
+                                )
+                            except Exception:
+                                response = client.models.generate_content(
+                                    model='models/gemini-1.5-flash',
+                                    contents=prompt
+                                )
 
                             st.success("✅ تم تلخيص الفيديو بنجاح!")
                             st.markdown(response.text)
