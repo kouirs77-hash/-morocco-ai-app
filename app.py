@@ -3,9 +3,6 @@ import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import re
-import os
-import tempfile
-import yt_dlp
 
 # --- 🗝️ كلمة السر الخاصة بالأدمن ---
 ADMIN_PASSWORD = "mohamed_kouirs_2026"
@@ -107,8 +104,8 @@ with st.sidebar:
         st.session_state.is_admin = False
 
     st.markdown("---")
-    api_key = st.text_input("أدخل GEMINI API KEY:", type="password")
-    st.markdown("[كيف تحصل على مفتاح API؟](https://aistudio.google.com/)")
+    api_key = st.text_input("أدخل GEMINI API KEY (تأكد أن يبدأ بـ AIzaSy):", type="password")
+    st.markdown("[كيف تحصل على مفتاح API؟](https://aistudio.google.com/app/apikey)")
     
     language = st.selectbox("🎯 لغة التلخيص والرد:", ["الدارجة المغربية 🇲🇦", "العربية الفصحى 🇲🇦", "الفرنسية 🇫🇷", "الإنجليزية 🇬🇧"])
     summary_type = st.selectbox("📝 نوع التلخيص:", ["ملخص شامل وتفصيلي", "نقاط رئيسية وسريعة", "أسئلة وإجابات وشرح مبسط"])
@@ -163,26 +160,18 @@ def extract_video_id(url):
 
 def get_transcript(video_id):
     try:
-        # المحاولة الأولى: جلب النص المكتوب بأي لغة متاحة (عربية، فرنسية، إلخ)
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['ar', 'ar-MA', 'fr', 'en'])
-        return " ".join([i['text'] for i in transcript_list])
+        # البحث عن النص بأي لغة متاحة (العربية، التلقائية، الفرنسية، الإنجليزية)
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript = transcript_list.find_transcript(['ar', 'ar-MA', 'en', 'fr'])
+        data = transcript.fetch()
+        return " ".join([i['text'] for i in data])
     except Exception:
-        return None
-
-def download_audio(url):
-    """تحميل صوت الفيديو في حال عدم وجود ترجمة نصية"""
-    try:
-        ydl_opts = {
-            'format': 'm4a/bestaudio/best',
-            'outtmpl': tempfile.mktemp(suffix='.m4a'),
-            'quiet': True,
-            'no_warnings': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            return ydl.prepare_filename(info)
-    except Exception:
-        return None
+        try:
+            # محاولة احتياطية لجلب أي نص مترجم إلكترونياً
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            return " ".join([i['text'] for i in transcript_list])
+        except Exception:
+            return None
 
 col_vid1, col_vid2 = st.columns([2, 1])
 
@@ -195,7 +184,7 @@ with col_vid1:
             if not api_key:
                 st.error("⚠️ يرجى إدخال Gemini API Key في القائمة الجانبية أولاً.")
             elif not video_url:
-                st.warning("⚠️ يرجى أدخال رابط الفيديو.")
+                st.warning("⚠️ يرجى إدخال رابط الفيديو.")
             else:
                 v_id = extract_video_id(video_url)
                 if v_id:
@@ -204,34 +193,19 @@ with col_vid1:
 
                     prompt_lang = "الدارجة المغربية المبسطة والشريحة" if "الدارجة" in language else language
 
-                    # المحاولة 1: جلب التفريغ النصي
-                    with st.spinner("جاري جلب تفاصيل الفيديو وتلخيصه..."):
+                    with st.spinner("جاري استخراج تفاصيل الدرس وتلخيصه..."):
                         text = get_transcript(v_id)
                         
                         if text:
                             try:
-                                prompt = f"قم بتلخيص هذا الدرس بشكل ممتاز ومفهوم بـ ({prompt_lang}) وبأسلوب ({summary_type}):\n\n{text}"
+                                prompt = f"قم بتلخيص هذا الدرس الشامل بالكامل وبطريقة مبسطة يفهمها التلميذ بـ ({prompt_lang}) وبأسلوب ({summary_type}):\n\n{text}"
                                 response = model.generate_content(prompt)
                                 st.success("✅ تم التلخيص بنجاح!")
                                 st.markdown(response.text)
                             except Exception as e:
                                 st.error(f"حدث خطأ أثناء التلخيص: {e}")
                         else:
-                            # المحاولة 2: تحليل صوت الفيديو مباشرة إذا تعذر جلب النص
-                            st.info("💡 لم نجد ترجمة نصية معتمدة.. جاري الاستماع إلى صوت الفيديو مباشرة ومعالجته...")
-                            audio_path = download_audio(video_url)
-                            if audio_path and os.path.exists(audio_path):
-                                try:
-                                    audio_file = genai.upload_file(path=audio_path)
-                                    prompt = f"استمع لهذا الفيديو التعليمي بدقة، وقم بتلخيص الشرح كاملاً بـ ({prompt_lang}) وبأسلوب ({summary_type}). اعطِ الشرح الأساسي، المفاهيم، والحلول المذكورة."
-                                    response = model.generate_content([prompt, audio_file])
-                                    st.success("✅ تم التلخيص الصوتي بنجاح!")
-                                    st.markdown(response.text)
-                                    os.remove(audio_path)
-                                except Exception as e:
-                                    st.error(f"تعذر تحليل صوت الفيديو: {e}")
-                            else:
-                                st.error("تعذر جلب تفاصيل أو صوت هذا الفيديو. تأكد من أن الرابط يعمل بشكل صحيح.")
+                            st.warning("⚠️ هذا الفيديو المحدد لا يحتوي على نص ترجمة تلقائي من يوتيوب. يُفضل تجربة فيديو آخر يحتوي على شرح أو نصوص توضيحية مفعلة.")
                 else:
                     st.error("رابط اليوتيوب غير صحيح.")
 
@@ -244,7 +218,7 @@ with col_vid1:
                     st.session_state.videos_list.append(text)
                     st.success(f"تمت إضافة الفيديو! الإجمالي: {len(st.session_state.videos_list)} فيديو.")
                 else:
-                    st.warning("تم حفظ الرابط، وسيتم استخدامه مباشرة أثناء تحليل الصورة.")
+                    st.warning("تم حفظ الرابط لاستخدامه أثناء تحليل الصورة.")
                     st.session_state.videos_list.append(f"رابط فيديو مرفق: {video_url}")
             else:
                 st.error("يرجى إدخال رابط فيديو صحيح أولاً.")
@@ -253,7 +227,7 @@ with col_vid1:
         st.caption(f"📌 الفيديوهات المخزنة في الجلسة: {len(st.session_state.videos_list)}")
 
 with col_vid2:
-    st.info("💡 **مميزات المنصة:**\n1. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n2. إمكانية **تحليل الصوت مباشرة** حتى وإن لم تكن هناك ترجمة مفعلة في اليوتيوب.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
+    st.info("💡 **مميزات المنصة:**\n1. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n2. **تحليل واستخراج الدروس** بنقرة واحدة.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
 
 # --- 9. تحليل صورة الفرض ---
 if btn_analyze:
