@@ -36,40 +36,28 @@ if "users_db" not in st.session_state:
 
 st.session_state.visitor_count += 1
 
-# --- 4. دالة الاستدعاء الذكية لمعالجة خطأ 404 وتجربة النماذج المتاحة تلقائياً ---
+# --- 4. دالة الاستدعاء الذكية لمعالجة أخطاء (404 و 429 - تجاوز الحصة) تلقائياً ---
 def generate_with_fallback(client, contents_payload):
     candidate_models = [
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
         'gemini-1.5-flash',
+        'gemini-2.0-flash',
+        'gemini-2.5-flash',
         'gemini-1.5-pro'
     ]
     last_error = None
     
-    # تجربة أسماء النماذج الأكثر انتشاراً أولاً
     for m in candidate_models:
         try:
             return client.models.generate_content(model=m, contents=contents_payload)
         except Exception as e:
             last_error = e
-            if "404" in str(e) or "NOT_FOUND" in str(e):
+            err_msg = str(e)
+            # إذا كان الخطأ 404 (موديل غير موجود) أو 429 (استنفاد الحصة المجانية)، ننتقل مباشرة للموديل التالي
+            if "404" in err_msg or "NOT_FOUND" in err_msg or "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                 continue
             else:
                 raise e
                 
-    # إذا لم تنجح الأسماء الثابتة، نبحث ديناميكياً داخل قائمة النماذج المتاحة لمفتاحك
-    try:
-        models_list = list(client.models.list())
-        for m in models_list:
-            m_name = getattr(m, 'name', '')
-            if 'flash' in m_name or 'pro' in m_name:
-                try:
-                    return client.models.generate_content(model=m_name, contents=contents_payload)
-                except Exception:
-                    continue
-    except Exception:
-        pass
-        
     raise last_error
 
 # --- 5. تصميم ألوان حديث وجذاب ---
@@ -336,7 +324,7 @@ else:
                         if uploaded_images:
                             contents_payload.extend(uploaded_images)
 
-                        # تنفيذ الطلب باستخدام نظام التجربة الذكي المانع لأخطاء 404
+                        # تنفيذ الطلب ذكياً لتفادي أي خطأ أغطية أو حصص
                         response = generate_with_fallback(client, contents_payload)
 
                         st.success("✅ تم إنجاز العملية بنجاح!")
@@ -350,7 +338,10 @@ else:
                         })
 
                     except Exception as e:
-                        st.error(f"حدث خطأ أثناء المعالجة: {e}")
+                        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                            st.error("⚠️ انتهت الحصة المجانية لمفتاح Gemini الخاص بك مؤقتاً! يرجى الانتظار لمدة دقيقة واحدة وإعادة المحاولة، أو تغيير الـ API Key من القائمة الجانبية.")
+                        else:
+                            st.error(f"حدث خطأ أثناء المعالجة: {e}")
 
     with tab_yt:
         st.subheader("🎥 تلخيص فيديوهات اليوتيوب")
@@ -393,7 +384,10 @@ else:
                                 "content": response.text
                             })
                         except Exception as e:
-                            st.error(f"حدث خطأ: {e}")
+                            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                                st.error("⚠️ انتهت الحصة المجانية لمفتاح Gemini الخاص بك مؤقتاً! يرجى الانتظار لمدة دقيقة واحدة وإعادة المحاولة.")
+                            else:
+                                st.error(f"حدث خطأ: {e}")
 
 st.markdown("""
     <div class="footer">
