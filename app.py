@@ -36,13 +36,13 @@ if "users_db" not in st.session_state:
 
 st.session_state.visitor_count += 1
 
-# --- 4. دالة الاستدعاء الذكية لمعالجة أخطاء (404 و 429 - تجاوز الحصة) تلقائياً ---
+# --- 4. دالة الاستدعاء الذكية لمعالجة الأخطاء والكوتا تلقائياً ---
 def generate_with_fallback(client, contents_payload):
+    # أسماء الموديلات الرسمية الحديثة فقط المعتمدة في المكتبة
     candidate_models = [
-        'gemini-1.5-flash',
         'gemini-2.0-flash',
-        'gemini-2.5-flash',
-        'gemini-pro'
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-8b'
     ]
     last_error = None
     
@@ -52,13 +52,14 @@ def generate_with_fallback(client, contents_payload):
         except Exception as e:
             last_error = e
             err_msg = str(e)
-            # إذا كان الخطأ 404 (موديل غير موجود) أو 429 (استنفاد الحصة المجانية)، ننتقل مباشرة للموديل التالي
+            # إذا كان الخطأ 404 أو 429 انتقل فوراً للموديل التالي
             if "404" in err_msg or "NOT_FOUND" in err_msg or "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                 continue
             else:
                 raise e
                 
     raise last_error
+
 
 # --- 5. تصميم ألوان حديث وجذاب ---
 st.markdown("""
