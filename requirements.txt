@@ -1,10 +1,8 @@
 streamlit
 google-genai
 youtube-transcript-api
-pillowstreamlit
-google-genai
-youtube-transcript-api
 pillow
-pypdf
+pypdf2
+
 
 
