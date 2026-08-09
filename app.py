@@ -266,4 +266,6 @@ st.markdown("""
         <div class="footer-title">صنع من طرف محمد كويرس</div>
         <div class="footer-sub">© 2026 جميع الحقوق محفوظة لملخص دروس المغرب</div>
     </div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)# يقرأ المفتاح تلقائياً من Secrets إذا كان موجوداً
+api_key = st.secrets.get("GEMINI_API_KEY", "")
+
