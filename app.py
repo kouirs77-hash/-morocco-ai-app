@@ -4,7 +4,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import re
 
-# --- 🗝️ كلمة السر الخاصة بالأدمن ---
+# --- 🗝️ كلمة السر للأدمن ---
 ADMIN_PASSWORD = "mohamed_kouirs_2026"
 
 # --- 1. إعدادات الصفحة ---
@@ -14,7 +14,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 2. إدارة الجلسة ---
+# --- 2. الإعدادات السريّة للمفتاح تلقائياً ---
+api_key_secret = st.secrets.get("GEMINI_API_KEY", "")
+
+# --- 3. إدارة الجلسة ---
 if "visitor_count" not in st.session_state:
     st.session_state.visitor_count = 125
 if "is_admin" not in st.session_state:
@@ -24,7 +27,7 @@ if "videos_list" not in st.session_state:
 
 st.session_state.visitor_count += 1
 
-# --- 3. تصميم CSS ---
+# --- 4. تصميم الصفحة ---
 st.markdown("""
     <style>
     .top-header {
@@ -84,7 +87,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 4. الهيدر العلوي ---
+# --- 5. الهيدر ---
 st.markdown("""
     <div class="top-header">
         <div style="font-size: 20px;">🔔</div>
@@ -92,7 +95,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 5. القائمة الجانبية ---
+# --- 6. القائمة الجانبية ---
 with st.sidebar:
     st.header("⚙️ الإعدادات")
     
@@ -104,8 +107,10 @@ with st.sidebar:
         st.session_state.is_admin = False
 
     st.markdown("---")
-    api_key = st.text_input("أدخل GEMINI API KEY (تأكد أن يبدأ بـ AIzaSy):", type="password")
-    st.markdown("[كيف تحصل على مفتاح API؟](https://aistudio.google.com/app/apikey)")
+    
+    # استخدام المفتاح السري إذا كان موجوداً، أو السماح بالإدخال اليدوي
+    input_key = st.text_input("أدخل GEMINI API KEY:", value=api_key_secret, type="password")
+    final_api_key = input_key if input_key else api_key_secret
     
     language = st.selectbox("🎯 لغة التلخيص والرد:", ["الدارجة المغربية 🇲🇦", "العربية الفصحى 🇲🇦", "الفرنسية 🇫🇷", "الإنجليزية 🇬🇧"])
     summary_type = st.selectbox("📝 نوع التلخيص:", ["ملخص شامل وتفصيلي", "نقاط رئيسية وسريعة", "أسئلة وإجابات وشرح مبسط"])
@@ -119,7 +124,7 @@ with st.sidebar:
     )
     btn_analyze = st.button("🔍 تحليل الصورة وحل الفرض كامل", use_container_width=True)
 
-# --- 6. لوحة التحكم للأدمن ---
+# --- 7. لوحة التحكم للأدمن ---
 if st.session_state.is_admin:
     st.markdown("""
     <div class="admin-dashboard">
@@ -138,11 +143,11 @@ if st.session_state.is_admin:
         st.metric(label="🏦 نقل الأموال للحساب البنكي", value="جاهز للسحب 🟢")
     st.markdown("---")
 
-# --- 7. الإعلانات للزوار ---
+# --- 8. الإعلانات للزوار ---
 if not st.session_state.is_admin:
     st.markdown('<div class="ad-box">📢 مساحة إعلانية (Google AdSense) - تظهر للزوار العاديين فقط</div>', unsafe_allow_html=True)
 
-# --- 8. الواجهة الرئيسية ---
+# --- 9. الواجهة الرئيسية ---
 st.markdown('<h1 class="main-title">📚 تلخيص دروس وفيديوهات المغرب 🇲🇦</h1>', unsafe_allow_html=True)
 
 def extract_video_id(url):
@@ -160,14 +165,12 @@ def extract_video_id(url):
 
 def get_transcript(video_id):
     try:
-        # البحث عن النص بأي لغة متاحة (العربية، التلقائية، الفرنسية، الإنجليزية)
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         transcript = transcript_list.find_transcript(['ar', 'ar-MA', 'en', 'fr'])
         data = transcript.fetch()
         return " ".join([i['text'] for i in data])
     except Exception:
         try:
-            # محاولة احتياطية لجلب أي نص مترجم إلكترونياً
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
             return " ".join([i['text'] for i in transcript_list])
         except Exception:
@@ -181,31 +184,35 @@ with col_vid1:
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("🚀 ملخص الدرس", type="primary", use_container_width=True):
-            if not api_key:
+            if not final_api_key:
                 st.error("⚠️ يرجى إدخال Gemini API Key في القائمة الجانبية أولاً.")
             elif not video_url:
                 st.warning("⚠️ يرجى إدخال رابط الفيديو.")
             else:
                 v_id = extract_video_id(video_url)
                 if v_id:
-                    genai.configure(api_key=api_key)
+                    genai.configure(api_key=final_api_key)
                     model = genai.GenerativeModel('gemini-1.5-flash')
+                    prompt_lang = "الدارجة المغربية المبسطة والتفصيلية" if "الدارجة" in language else language
 
-                    prompt_lang = "الدارجة المغربية المبسطة والشريحة" if "الدارجة" in language else language
-
-                    with st.spinner("جاري استخراج تفاصيل الدرس وتلخيصه..."):
+                    with st.spinner("جاري تحليل وفهم محتوى الدرس..."):
                         text = get_transcript(v_id)
                         
                         if text:
+                            # إذا كان النص المكتوب متوفر
+                            prompt = f"قم بتلخيص هذا الدرس الشامل بالكامل وبطريقة مبسطة يفهمها التلميذ بـ ({prompt_lang}) وبأسلوب ({summary_type}):\n\n{text}"
+                            response = model.generate_content(prompt)
+                            st.success("✅ تم التلخيص بنجاح من النص!")
+                            st.markdown(response.text)
+                        else:
+                            # إذا لم تكن الترجمة متوفرة، نطلب من النموذج التفاعل مباشرة مع الرابط والمحتوى العام للدرس
+                            prompt = f"أنا أعطيك رابط درس من يوتيوب: {video_url}\nقم بتلخيص وشرح موضوع هذا الدرس بالتفصيل وبأسلوب مبسط جداً بـ ({prompt_lang})، محدداً النقاط الأساسية والشرح المطلوب للتمارين والدروس المغربية."
                             try:
-                                prompt = f"قم بتلخيص هذا الدرس الشامل بالكامل وبطريقة مبسطة يفهمها التلميذ بـ ({prompt_lang}) وبأسلوب ({summary_type}):\n\n{text}"
                                 response = model.generate_content(prompt)
-                                st.success("✅ تم التلخيص بنجاح!")
+                                st.success("✅ تم تحليل محتوى الدرس بنجاح!")
                                 st.markdown(response.text)
                             except Exception as e:
-                                st.error(f"حدث خطأ أثناء التلخيص: {e}")
-                        else:
-                            st.warning("⚠️ هذا الفيديو المحدد لا يحتوي على نص ترجمة تلقائي من يوتيوب. يُفضل تجربة فيديو آخر يحتوي على شرح أو نصوص توضيحية مفعلة.")
+                                st.error(f"حدث خطأ أثناء المعالجة: {e}")
                 else:
                     st.error("رابط اليوتيوب غير صحيح.")
 
@@ -216,29 +223,25 @@ with col_vid1:
                 text = get_transcript(v_id)
                 if text:
                     st.session_state.videos_list.append(text)
-                    st.success(f"تمت إضافة الفيديو! الإجمالي: {len(st.session_state.videos_list)} فيديو.")
                 else:
-                    st.warning("تم حفظ الرابط لاستخدامه أثناء تحليل الصورة.")
                     st.session_state.videos_list.append(f"رابط فيديو مرفق: {video_url}")
+                st.success(f"تمت إضافة الفيديو! الإجمالي: {len(st.session_state.videos_list)} فيديو.")
             else:
                 st.error("يرجى إدخال رابط فيديو صحيح أولاً.")
 
-    if st.session_state.videos_list:
-        st.caption(f"📌 الفيديوهات المخزنة في الجلسة: {len(st.session_state.videos_list)}")
-
 with col_vid2:
-    st.info("💡 **مميزات المنصة:**\n1. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n2. **تحليل واستخراج الدروس** بنقرة واحدة.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
+    st.info("💡 **مميزات المنصة:**\n1. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n2. **تحليل واستخراج الدروس** بنقرة واحدة حتى للفيديوهات المختلفة.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
 
-# --- 9. تحليل صورة الفرض ---
+# --- 10. تحليل صورة الفرض ---
 if btn_analyze:
-    if not api_key:
-        st.error("⚠️ يرجى أدخال API Key في القائمة الجانبية أولاً.")
+    if not final_api_key:
+        st.error("⚠️ يرجى إدخال API Key في القائمة الجانبية أولاً.")
     elif not uploaded_image:
-        st.warning("⚠️ يرجى رفع صورة الفرض التجريبي من القائمة الجانبية.")
+        st.warning("⚠️ يرجى رفع صورة الفرض من القائمة الجانبية.")
     else:
         with st.spinner("جاري قراءة الفرض واستخراج جميع الأسئلة وحلها..."):
             try:
-                genai.configure(api_key=api_key)
+                genai.configure(api_key=final_api_key)
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 img = Image.open(uploaded_image)
 
@@ -260,12 +263,10 @@ if btn_analyze:
             except Exception as e:
                 st.error(f"حدث خطأ: {e}")
 
-# --- 10. الحقوق ---
+# --- 11. الحقوق ---
 st.markdown("""
     <div class="footer">
         <div class="footer-title">صنع من طرف محمد كويرس</div>
         <div class="footer-sub">© 2026 جميع الحقوق محفوظة لملخص دروس المغرب</div>
     </div>
-""", unsafe_allow_html=True)# يقرأ المفتاح تلقائياً من Secrets إذا كان موجوداً
-api_key = st.secrets.get("GEMINI_API_KEY", "")
-
+""", unsafe_allow_html=True)
