@@ -3,6 +3,7 @@ import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import re
+from datetime import datetime
 
 # --- 🗝️ كلمة السر للأدمن ---
 ADMIN_PASSWORD = "mohamed_kouirs_2026"
@@ -17,7 +18,7 @@ st.set_page_config(
 # --- 2. الإعدادات السريّة للمفتاح تلقائياً ---
 api_key_secret = st.secrets.get("GEMINI_API_KEY", "")
 
-# --- 3. إدارة الجلسة والبيانات ---
+# --- 3. إدارة الجلسة والبيانات الحافظة ---
 if "visitor_count" not in st.session_state:
     st.session_state.visitor_count = 125
 if "is_admin" not in st.session_state:
@@ -28,6 +29,10 @@ if "user_authenticated" not in st.session_state:
     st.session_state.user_authenticated = False
 if "user_info" not in st.session_state:
     st.session_state.user_info = None
+
+# قاعدة بيانات مؤقتة لحفظ ملخصات الحساب ومنع ضياعها بالخطأ
+if "user_history" not in st.session_state:
+    st.session_state.user_history = []
 
 st.session_state.visitor_count += 1
 
@@ -72,7 +77,7 @@ st.markdown("""
     }
     .login-container {
         max-width: 450px;
-        margin: 40px auto;
+        margin: 20px auto;
         padding: 25px;
         border-radius: 12px;
         background-color: #F9FAFB;
@@ -80,25 +85,12 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .auth-btn-google {
-        background-color: #4285F4;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 8px;
-        text-decoration: none;
-        font-weight: bold;
-        display: block;
-        margin: 10px 0;
-    }
-    .auth-btn-apple {
-        background-color: #000000;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 8px;
-        text-decoration: none;
-        font-weight: bold;
-        display: block;
-        margin: 10px 0;
+    .history-card {
+        background-color: #F3F4F6;
+        border-right: 4px solid #10B981;
+        padding: 10px 15px;
+        border-radius: 6px;
+        margin-bottom: 10px;
     }
     .footer {
         width: 100%;
@@ -129,57 +121,70 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 6. شاشة تسجيل الدخول (تسجيل الدخول عبر Google / iCloud) ---
+# --- 6. شاشة تسجيل الدخول بالتفصيل (اسم الحساب + كلمة السر) ---
 if not st.session_state.user_authenticated:
     st.markdown('<h1 class="main-title">📚 مرحبا بك في منصة ملخص دروس المغرب 🇲🇦</h1>', unsafe_allow_html=True)
     
     st.markdown("""
         <div class="login-container">
-            <h3>🔐 يرجى تسجيل الدخول لمتابعة الاستخدام</h3>
-            <p style="color: #6B7280; font-size: 14px;">قم بربط حسابك للوصول إلى أدوات التلخيص وحل الفروض بالذكاء الاصطناعي.</p>
+            <h3>🔐 تسجيل الدخول بالحساب</h3>
+            <p style="color: #6B7280; font-size: 14px;">أدخل اسم حسابك وكلمة السر لحفظ ملخصاتك تلقائياً.</p>
         </div>
     """, unsafe_allow_html=True)
     
     col_acc1, col_acc2, col_acc3 = st.columns([1, 2, 1])
     with col_acc2:
-        tab_google, tab_apple = st.tabs(["🌐 حساب Google", "🍏 حساب iCloud / Apple"])
+        tab_google, tab_apple = st.tabs(["🌐 حساب Google / عادي", "🍏 حساب iCloud / Apple"])
         
         with tab_google:
-            st.info("قم بإدخال بريد حساب Google الخاص بك للدخول السريع:")
-            email_google = st.text_input("البريد الإلكتروني (Google Gmail):", key="google_email")
-            if st.button("التسجيل بواسطة Google", type="primary", use_container_width=True):
-                if email_google and "@" in email_google:
+            username = st.text_input("اسم الحساب / البريد (Google):", key="g_user")
+            password = st.text_input("كلمة السر:", type="password", key="g_pass")
+            if st.button("دخول للحساب", type="primary", use_container_width=True):
+                if username and len(password) >= 4:
                     st.session_state.user_authenticated = True
-                    st.session_state.user_info = {"type": "Google", "email": email_google}
+                    st.session_state.user_info = {"type": "Google", "username": username}
                     st.rerun()
                 else:
-                    st.error("يرجى إدخال بريد إلكتروني صحيح.")
+                    st.error("يرجى إدخال اسم الحساب وكلمة سر من 4 أحرف/أرقام على الأقل.")
                     
         with tab_apple:
-            st.info("قم بإدخال بريد iCloud الخاص بك للدخول السريع:")
-            email_apple = st.text_input("البريد الإلكتروني (iCloud / Apple ID):", key="apple_email")
-            if st.button("التسجيل بواسطة iCloud", use_container_width=True):
-                if email_apple and "@" in email_apple:
+            apple_id = st.text_input("اسم حساب Apple ID / iCloud:", key="a_user")
+            apple_pass = st.text_input("كلمة السر:", type="password", key="a_pass")
+            if st.button("دخول بـ Apple ID", use_container_width=True):
+                if apple_id and len(apple_pass) >= 4:
                     st.session_state.user_authenticated = True
-                    st.session_state.user_info = {"type": "iCloud", "email": email_apple}
+                    st.session_state.user_info = {"type": "iCloud", "username": apple_id}
                     st.rerun()
                 else:
-                    st.error("يرجى إدخال بريد إلكتروني صحيح.")
+                    st.error("يرجى إدخال اسم الحساب وكلمة السر بشكل صحيح.")
 
-# --- 7. التطبيق الرئيسي (يظهر فقط بعد تسجيل الدخول) ---
+# --- 7. التطبيق الرئيسي بعد الدخول ---
 else:
 
-    # --- القائمة الجانبية ---
+    # --- القائمة الجانبية الجانبية والعلوية ---
     with st.sidebar:
-        st.write(f"👤 مرحباً بك: **{st.session_state.user_info['email']}**")
-        st.caption(f"طريقة الدخول: {st.session_state.user_info['type']}")
+        st.write(f"👤 الحساب الحالي: **{st.session_state.user_info['username']}**")
+        st.caption(f"النوع: {st.session_state.user_info['type']}")
+        
         if st.button("تسجيل الخروج 🚪"):
             st.session_state.user_authenticated = False
             st.session_state.user_info = None
             st.rerun()
 
         st.markdown("---")
-        st.header("⚙️ الإعدادات")
+        
+        # --- 📁 أرشيف وملخصات المحفوظة (حفظ التلخيصات السابقة) ---
+        st.header("📜 الملخصات المحفوظة בחسابك")
+        if st.session_state.user_history:
+            st.success(f"لديك {len(st.session_state.user_history)} ملخصات محفوظة.")
+            for idx, item in enumerate(reversed(st.session_state.user_history)):
+                with st.expander(f"📌 {item['title']} - ({item['time']})"):
+                    st.markdown(item['content'])
+        else:
+            st.info("لا توجد ملخصات محفوظة بعد. أي تلخيص تقوم به سيحفظ هنا تلقائياً!")
+
+        st.markdown("---")
+        st.header("⚙️ الإعدادات العامة")
         
         admin_input = st.text_input("🔑 دخول الأدمن (كلمة السر):", type="password")
         if admin_input == ADMIN_PASSWORD:
@@ -278,20 +283,31 @@ else:
 
                         with st.spinner("جاري تحليل وفهم محتوى الدرس..."):
                             text = get_transcript(v_id)
+                            res_text = ""
                             
                             if text:
                                 prompt = f"قم بتلخيص هذا الدرس الشامل بالكامل وبطريقة مبسطة يفهمها التلميذ بـ ({prompt_lang}) وبأسلوب ({summary_type}):\n\n{text}"
                                 response = model.generate_content(prompt)
-                                st.success("✅ تم التلخيص بنجاح من النص!")
-                                st.markdown(response.text)
+                                res_text = response.text
                             else:
                                 prompt = f"أنا أعطيك رابط درس من يوتيوب: {video_url}\nقم بتلخيص وشرح موضوع هذا الدرس بالتفصيل وبأسلوب مبسط جداً بـ ({prompt_lang})، محدداً النقاط الأساسية والشرح المطلوب للتمارين والدروس المغربية."
                                 try:
                                     response = model.generate_content(prompt)
-                                    st.success("✅ تم تحليل محتوى الدرس بنجاح!")
-                                    st.markdown(response.text)
+                                    res_text = response.text
                                 except Exception as e:
                                     st.error(f"حدث خطأ أثناء المعالجة: {e}")
+
+                            if res_text:
+                                st.success("✅ تم التلخيص بنجاح وحفظه في حسابك!")
+                                st.markdown(res_text)
+                                
+                                # حفظ التلخيص تلقائياً في حساب المستخدم
+                                current_time = datetime.now().strftime("%H:%M - %Y/%m/%d")
+                                st.session_state.user_history.append({
+                                    "title": f"درس يوتيوب ({v_id})",
+                                    "time": current_time,
+                                    "content": res_text
+                                })
                     else:
                         st.error("رابط اليوتيوب غير صحيح.")
 
@@ -309,7 +325,7 @@ else:
                     st.error("يرجى إدخال رابط فيديو صحيح أولاً.")
 
     with col_vid2:
-        st.info("💡 **مميزات المنصة:**\n1. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n2. **تحليل واستخراج الدروس** بنقرة واحدة حتى للفيديوهات المختلفة.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
+        st.info("💡 **مميزات المنصة:**\n1. **حفظ محلي فوري** لجميع ملخصاتك في القائمة الجانبية (3 أشرطة بالاكود).\n2. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
 
     # --- تحليل صورة الفرض ---
     if btn_analyze:
@@ -339,6 +355,15 @@ else:
                         st.image(img, caption="صورة الفرض المرفوع", use_column_width=True)
                     with col_res2:
                         st.markdown(response.text)
+                    
+                    # حفظ التحلل في تاريخ الحساب
+                    current_time = datetime.now().strftime("%H:%M - %Y/%m/%d")
+                    st.session_state.user_history.append({
+                        "title": f"حل فرض/صورة",
+                        "time": current_time,
+                        "content": response.text
+                    })
+
                 except Exception as e:
                     st.error(f"حدث خطأ: {e}")
 
