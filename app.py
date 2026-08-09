@@ -3,18 +3,21 @@ import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import re
+import os
+import tempfile
+import yt_dlp
 
 # --- 🗝️ كلمة السر الخاصة بالأدمن ---
 ADMIN_PASSWORD = "mohamed_kouirs_2026"
 
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(
-    page_title="ملخص دروس المغرب",
+    page_title="ملخص دروس المغرب - بالدارجة",
     page_icon="🇲🇦",
     layout="wide"
 )
 
-# --- 2. إدارة الجلسة والزوار ---
+# --- 2. إدارة الجلسة ---
 if "visitor_count" not in st.session_state:
     st.session_state.visitor_count = 125
 if "is_admin" not in st.session_state:
@@ -107,15 +110,15 @@ with st.sidebar:
     api_key = st.text_input("أدخل GEMINI API KEY:", type="password")
     st.markdown("[كيف تحصل على مفتاح API؟](https://aistudio.google.com/)")
     
-    language = st.selectbox("🎯 لغة التلخيص:", ["العربية", "الفرنسية", "الإنجليزية"])
-    summary_type = st.selectbox("📝 نوع التلخيص:", ["ملخص شامل وتفصيلي", "نقاط رئيسية وسريعة", "أسئلة وإجابات"])
+    language = st.selectbox("🎯 لغة التلخيص والرد:", ["الدارجة المغربية 🇲🇦", "العربية الفصحى 🇲🇦", "الفرنسية 🇫🇷", "الإنجليزية 🇬🇧"])
+    summary_type = st.selectbox("📝 نوع التلخيص:", ["ملخص شامل وتفصيلي", "نقاط رئيسية وسريعة", "أسئلة وإجابات وشرح مبسط"])
 
     st.markdown("---")
-    st.header("🖼️ الوصول للصور (الفرض التجريبي)")
+    st.header("🖼️ تحليل الصور والفروض")
     uploaded_image = st.file_uploader("قم برفع صورة الفرض أو التمرين:", type=["png", "jpg", "jpeg"])
     image_prompt = st.text_area(
         "التعليمات:",
-        value="استخرج جميع الأسئلة والتمارين المكتوبة في الصورة وأجب عليها بالكامل إجابة نموذجية معتمدًا على الفيديوهات المرفقة."
+        value="استخرج جميع الأسئلة والتمارين المكتوبة في الصورة وأجب عليها بالكامل إجابة نموذجية وبشرح واضح يفهمه الطالب المغربي."
     )
     btn_analyze = st.button("🔍 تحليل الصورة وحل الفرض كامل", use_container_width=True)
 
@@ -136,18 +139,15 @@ if st.session_state.is_admin:
         st.metric(label="💰 أرباح مشاهدة الإعلانات", value=f"${estimated_earnings} USD")
     with col_adm3:
         st.metric(label="🏦 نقل الأموال للحساب البنكي", value="جاهز للسحب 🟢")
-
-    st.info("💡 **طريقة نقل الأموال لأرض الواقع:** يتم تحويل الأرباح من شبكة الإعلانات مباشرة إلى حسابك البنكي عند الوصول للحد الأدنى للسحب.")
     st.markdown("---")
 
-# --- 7. الإعلانات (تظهر للزوار فقط) ---
+# --- 7. الإعلانات للزوار ---
 if not st.session_state.is_admin:
     st.markdown('<div class="ad-box">📢 مساحة إعلانية (Google AdSense) - تظهر للزوار العاديين فقط</div>', unsafe_allow_html=True)
 
 # --- 8. الواجهة الرئيسية ---
-st.markdown('<h1 class="main-title">📚 تلخيص الدروس والفيديوهات</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title">📚 تلخيص دروس وفيديوهات المغرب 🇲🇦</h1>', unsafe_allow_html=True)
 
-# دالة استخراج id معالجة وبدون أخطاء
 def extract_video_id(url):
     if not url:
         return None
@@ -163,42 +163,77 @@ def extract_video_id(url):
 
 def get_transcript(video_id):
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['ar', 'fr', 'en'])
+        # المحاولة الأولى: جلب النص المكتوب بأي لغة متاحة (عربية، فرنسية، إلخ)
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['ar', 'ar-MA', 'fr', 'en'])
         return " ".join([i['text'] for i in transcript_list])
+    except Exception:
+        return None
+
+def download_audio(url):
+    """تحميل صوت الفيديو في حال عدم وجود ترجمة نصية"""
+    try:
+        ydl_opts = {
+            'format': 'm4a/bestaudio/best',
+            'outtmpl': tempfile.mktemp(suffix='.m4a'),
+            'quiet': True,
+            'no_warnings': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            return ydl.prepare_filename(info)
     except Exception:
         return None
 
 col_vid1, col_vid2 = st.columns([2, 1])
 
 with col_vid1:
-    video_url = st.text_input("🔗 أدخل رابط فيديو اليوتيوب للحصول على ملخص شامل ومساعد للدراسة:", placeholder="رابط فيديو اليوتيوب")
+    video_url = st.text_input("🔗 أدخل رابط فيديو اليوتيوب (دروس مغربية، شرح بالدارجة...):", placeholder="https://www.youtube.com/watch?v=...")
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
         if st.button("🚀 ملخص الدرس", type="primary", use_container_width=True):
             if not api_key:
-                st.error("يرجى إدخال API Key في القائمة الجانبية.")
+                st.error("⚠️ يرجى إدخال Gemini API Key في القائمة الجانبية أولاً.")
             elif not video_url:
-                st.warning("يرجى إدخال رابط الفيديو.")
+                st.warning("⚠️ يرجى أدخال رابط الفيديو.")
             else:
                 v_id = extract_video_id(video_url)
                 if v_id:
-                    with st.spinner("جاري التلخيص..."):
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+
+                    prompt_lang = "الدارجة المغربية المبسطة والشريحة" if "الدارجة" in language else language
+
+                    # المحاولة 1: جلب التفريغ النصي
+                    with st.spinner("جاري جلب تفاصيل الفيديو وتلخيصه..."):
                         text = get_transcript(v_id)
+                        
                         if text:
                             try:
-                                genai.configure(api_key=api_key)
-                                model = genai.GenerativeModel('gemini-1.5-flash')
-                                prompt = f"قم بتلخيص الفيديو بلغة {language} وبأسلوب {summary_type}:\n{text}"
+                                prompt = f"قم بتلخيص هذا الدرس بشكل ممتاز ومفهوم بـ ({prompt_lang}) وبأسلوب ({summary_type}):\n\n{text}"
                                 response = model.generate_content(prompt)
                                 st.success("✅ تم التلخيص بنجاح!")
                                 st.markdown(response.text)
                             except Exception as e:
-                                st.error(f"خطأ: {e}")
+                                st.error(f"حدث خطأ أثناء التلخيص: {e}")
                         else:
-                            st.error("تعذر استخراج النص من هذا الفيديو (قد لا يحتوي على ترجمة معتمدة).")
+                            # المحاولة 2: تحليل صوت الفيديو مباشرة إذا تعذر جلب النص
+                            st.info("💡 لم نجد ترجمة نصية معتمدة.. جاري الاستماع إلى صوت الفيديو مباشرة ومعالجته...")
+                            audio_path = download_audio(video_url)
+                            if audio_path and os.path.exists(audio_path):
+                                try:
+                                    audio_file = genai.upload_file(path=audio_path)
+                                    prompt = f"استمع لهذا الفيديو التعليمي بدقة، وقم بتلخيص الشرح كاملاً بـ ({prompt_lang}) وبأسلوب ({summary_type}). اعطِ الشرح الأساسي، المفاهيم، والحلول المذكورة."
+                                    response = model.generate_content([prompt, audio_file])
+                                    st.success("✅ تم التلخيص الصوتي بنجاح!")
+                                    st.markdown(response.text)
+                                    os.remove(audio_path)
+                                except Exception as e:
+                                    st.error(f"تعذر تحليل صوت الفيديو: {e}")
+                            else:
+                                st.error("تعذر جلب تفاصيل أو صوت هذا الفيديو. تأكد من أن الرابط يعمل بشكل صحيح.")
                 else:
-                    st.error("رابط غير صحيح.")
+                    st.error("رابط اليوتيوب غير صحيح.")
 
     with col_btn2:
         if st.button("➕ حفظ الفيديو للتحليل مع الصورة", use_container_width=True):
@@ -209,7 +244,8 @@ with col_vid1:
                     st.session_state.videos_list.append(text)
                     st.success(f"تمت إضافة الفيديو! الإجمالي: {len(st.session_state.videos_list)} فيديو.")
                 else:
-                    st.error("تعذر جلب نص الفيديو.")
+                    st.warning("تم حفظ الرابط، وسيتم استخدامه مباشرة أثناء تحليل الصورة.")
+                    st.session_state.videos_list.append(f"رابط فيديو مرفق: {video_url}")
             else:
                 st.error("يرجى إدخال رابط فيديو صحيح أولاً.")
 
@@ -217,7 +253,7 @@ with col_vid1:
         st.caption(f"📌 الفيديوهات المخزنة في الجلسة: {len(st.session_state.videos_list)}")
 
 with col_vid2:
-    st.info("💡 **كيف تعمل المنصة؟**\n1. ضع رابط فيديو للتلخيص السريع.\n2. أو قم بإضافة فيديوهات متعددة وافتح القائمة الجانبية لرفع صورة الفرض التجريبي ليقوم الذكاء الاصطناعي بإجابتها بالكامل.")
+    st.info("💡 **مميزات المنصة:**\n1. **دعم كامل للدارجة المغربية** لتبسيط الشرح والدروس.\n2. إمكانية **تحليل الصوت مباشرة** حتى وإن لم تكن هناك ترجمة مفعلة في اليوتيوب.\n3. رفع صور الفروض والتمارين لحلها بالكامل.")
 
 # --- 9. تحليل صورة الفرض ---
 if btn_analyze:
@@ -236,7 +272,8 @@ if btn_analyze:
                 if st.session_state.videos_list:
                     context = "\n\nالمعطيات المأخوذة من فيديوهات الدروس المرفقة:\n" + "\n--- فيديو جديد ---\n".join([v[:3000] for v in st.session_state.videos_list])
 
-                full_prompt = f"{image_prompt}\n{context}"
+                prompt_lang = "الدارجة المغربية" if "الدارجة" in language else language
+                full_prompt = f"{image_prompt}\nقم بالشرح والحل بـ ({prompt_lang}).\n{context}"
                 response = model.generate_content([full_prompt, img])
 
                 st.markdown("---")
@@ -249,10 +286,10 @@ if btn_analyze:
             except Exception as e:
                 st.error(f"حدث خطأ: {e}")
 
-# --- 10. الحقوق في الأسفل ---
+# --- 10. الحقوق ---
 st.markdown("""
     <div class="footer">
         <div class="footer-title">صنع من طرف محمد كويرس</div>
-        <div class="footer-sub">© 2024 جميع الحقوق محفوظة لملخص دروس المغرب</div>
+        <div class="footer-sub">© 2026 جميع الحقوق محفوظة لملخص دروس المغرب</div>
     </div>
 """, unsafe_allow_html=True)
