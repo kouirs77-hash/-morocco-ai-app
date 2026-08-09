@@ -29,7 +29,6 @@ if "user_authenticated" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
 
-# قاعدة بيانات للمستخدمين وحفظ ملخصات كل حساب
 if "users_db" not in st.session_state:
     st.session_state.users_db = {
         "mohamed": {"pass": "123456", "history": []}
@@ -37,7 +36,43 @@ if "users_db" not in st.session_state:
 
 st.session_state.visitor_count += 1
 
-# --- 4. تصميم ألوان حديث وجذاب ---
+# --- 4. دالة الاستدعاء الذكية لمعالجة خطأ 404 وتجربة النماذج المتاحة تلقائياً ---
+def generate_with_fallback(client, contents_payload):
+    candidate_models = [
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro'
+    ]
+    last_error = None
+    
+    # تجربة أسماء النماذج الأكثر انتشاراً أولاً
+    for m in candidate_models:
+        try:
+            return client.models.generate_content(model=m, contents=contents_payload)
+        except Exception as e:
+            last_error = e
+            if "404" in str(e) or "NOT_FOUND" in str(e):
+                continue
+            else:
+                raise e
+                
+    # إذا لم تنجح الأسماء الثابتة، نبحث ديناميكياً داخل قائمة النماذج المتاحة لمفتاحك
+    try:
+        models_list = list(client.models.list())
+        for m in models_list:
+            m_name = getattr(m, 'name', '')
+            if 'flash' in m_name or 'pro' in m_name:
+                try:
+                    return client.models.generate_content(model=m_name, contents=contents_payload)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+        
+    raise last_error
+
+# --- 5. تصميم ألوان حديث وجذاب ---
 st.markdown("""
     <style>
     .stApp {
@@ -106,7 +141,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. الهيدر العلوي ---
+# --- 6. الهيدر العلوي ---
 st.markdown("""
     <div class="top-header">
         <div style="font-size: 24px;">🔔</div>
@@ -114,7 +149,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 6. نظام تسجيل وتأسيس الحسابات المحفوظة ---
+# --- 7. نظام تسجيل الحسابات ---
 if not st.session_state.user_authenticated:
     st.markdown('<h1 class="main-title">📚 منصة ملخص دروس المغرب الذكية 🇲🇦</h1>', unsafe_allow_html=True)
     
@@ -166,7 +201,7 @@ if not st.session_state.user_authenticated:
                     st.success("✅ تم إنشاء الحساب بنجاح ودخولك للمنصة!")
                     st.rerun()
 
-# --- 7. التطبيق الرئيسي بعد الدخول ---
+# --- 8. التطبيق الرئيسي ---
 else:
     current_u = st.session_state.current_user
     user_data = st.session_state.users_db[current_u]
@@ -188,7 +223,7 @@ else:
                 with st.expander(f"📌 {item['title']} ({item['time']})"):
                     st.markdown(item['content'])
         else:
-            st.info("لا توجد عمليات محفوظة بعد. كل ملخص أو حل سيتخزن هنا لحسابك!")
+            st.info("لا توجد عمليات محفوظة بعد.")
 
         st.markdown("---")
         st.header("⚙️ إعدادات المفتاح والمدير")
@@ -301,17 +336,8 @@ else:
                         if uploaded_images:
                             contents_payload.extend(uploaded_images)
 
-                        # محاولة طلب النماذج المتاحة تلقائياً لتجنب مشكلة 404
-                        try:
-                            response = client.models.generate_content(
-                                model='gemini-1.5-flash',
-                                contents=contents_payload
-                            )
-                        except Exception:
-                            response = client.models.generate_content(
-                                model='models/gemini-1.5-flash',
-                                contents=contents_payload
-                            )
+                        # تنفيذ الطلب باستخدام نظام التجربة الذكي المانع لأخطاء 404
+                        response = generate_with_fallback(client, contents_payload)
 
                         st.success("✅ تم إنجاز العملية بنجاح!")
                         st.markdown(response.text)
@@ -355,16 +381,7 @@ else:
                             else:
                                 prompt = f"أنا أعطيك رابط درس يوتيوب: {video_url}\nقم بتلخيص وشرح هذا الدرس بـ ({prompt_lang})."
 
-                            try:
-                                response = client.models.generate_content(
-                                    model='gemini-1.5-flash',
-                                    contents=prompt
-                                )
-                            except Exception:
-                                response = client.models.generate_content(
-                                    model='models/gemini-1.5-flash',
-                                    contents=prompt
-                                )
+                            response = generate_with_fallback(client, prompt)
 
                             st.success("✅ تم تلخيص الفيديو بنجاح!")
                             st.markdown(response.text)
