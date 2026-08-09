@@ -1,2 +1,5 @@
 streamlit
 google-generativeai
+youtube-transcript-api
+pillow
+
