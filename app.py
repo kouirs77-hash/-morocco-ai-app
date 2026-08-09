@@ -4,7 +4,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import re
 
-# --- 🗝️ كلمة السر الخاصة بالأدمن (يمكنك تغييرها) ---
+# --- 🗝️ كلمة السر الخاصة بالأدمن ---
 ADMIN_PASSWORD = "mohamed_kouirs_2026"
 
 # --- 1. إعدادات الصفحة ---
@@ -16,7 +16,7 @@ st.set_page_config(
 
 # --- 2. إدارة الجلسة والزوار ---
 if "visitor_count" not in st.session_state:
-    st.session_state.visitor_count = 125  # عداد الزوار التراكمي
+    st.session_state.visitor_count = 125
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 if "videos_list" not in st.session_state:
@@ -24,7 +24,7 @@ if "videos_list" not in st.session_state:
 
 st.session_state.visitor_count += 1
 
-# --- 3. تصميم CSS المطابق للواجهة ---
+# --- 3. تصميم CSS ---
 st.markdown("""
     <style>
     .top-header {
@@ -119,7 +119,7 @@ with st.sidebar:
     )
     btn_analyze = st.button("🔍 تحليل الصورة وحل الفرض كامل", use_container_width=True)
 
-# --- 6. لوحة التحكم المخصصة لك ---
+# --- 6. لوحة التحكم للأدمن ---
 if st.session_state.is_admin:
     st.markdown("""
     <div class="admin-dashboard">
@@ -137,7 +137,7 @@ if st.session_state.is_admin:
     with col_adm3:
         st.metric(label="🏦 نقل الأموال للحساب البنكي", value="جاهز للسحب 🟢")
 
-    st.info("💡 **طريقة نقل الأموال لأرض الواقع:** يتم تحويل الأرباح من شبكة الإعلانات (مثل Google AdSense) مباشرة إلى حسابك البنكي عند الوصول للحد الأدنى للسحب.")
+    st.info("💡 **طريقة نقل الأموال لأرض الواقع:** يتم تحويل الأرباح من شبكة الإعلانات مباشرة إلى حسابك البنكي عند الوصول للحد الأدنى للسحب.")
     st.markdown("---")
 
 # --- 7. الإعلانات (تظهر للزوار فقط) ---
@@ -147,10 +147,19 @@ if not st.session_state.is_admin:
 # --- 8. الواجهة الرئيسية ---
 st.markdown('<h1 class="main-title">📚 تلخيص الدروس والفيديوهات</h1>', unsafe_allow_html=True)
 
+# دالة استخراج id معالجة وبدون أخطاء
 def extract_video_id(url):
-    regex = r"(?:v=|\/([0-9A-Za-z_-]{11}).*[\?&]v=]|youtu\.be\/)([^"&"\?\/]+)"
-    match = re.search(regex, url)
-    return match.group(2) or match.group(1) if match else None
+    if not url:
+        return None
+    patterns = [
+        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+        r'youtu\.be\/([0-9A-Za-z_-]{11})'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
 
 def get_transcript(video_id):
     try:
@@ -187,7 +196,7 @@ with col_vid1:
                             except Exception as e:
                                 st.error(f"خطأ: {e}")
                         else:
-                            st.error("تعذر استخراج النص من هذا الفيديو.")
+                            st.error("تعذر استخراج النص من هذا الفيديو (قد لا يحتوي على ترجمة معتمدة).")
                 else:
                     st.error("رابط غير صحيح.")
 
@@ -199,6 +208,10 @@ with col_vid1:
                 if text:
                     st.session_state.videos_list.append(text)
                     st.success(f"تمت إضافة الفيديو! الإجمالي: {len(st.session_state.videos_list)} فيديو.")
+                else:
+                    st.error("تعذر جلب نص الفيديو.")
+            else:
+                st.error("يرجى إدخال رابط فيديو صحيح أولاً.")
 
     if st.session_state.videos_list:
         st.caption(f"📌 الفيديوهات المخزنة في الجلسة: {len(st.session_state.videos_list)}")
