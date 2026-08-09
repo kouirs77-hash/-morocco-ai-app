@@ -6,7 +6,7 @@ import pypdf
 import re
 from datetime import datetime
 
-# --- 🗝️ كلمة السر للأدمن ---
+# --- 🔑 كلمة السر للأدمن ---
 ADMIN_PASSWORD = "mohamed_kouirs_2026"
 
 # --- 1. إعدادات الصفحة ---
@@ -36,13 +36,12 @@ if "users_db" not in st.session_state:
 
 st.session_state.visitor_count += 1
 
-# --- 4. دالة الاستدعاء الذكية لمعالجة الأخطاء والكوتا تلقائياً ---
+# --- 4. دالة الاستدعاء الذكية لتفادي الأخطاء (404 و 429) تلقائياً ---
 def generate_with_fallback(client, contents_payload):
-    # أسماء الموديلات الرسمية الحديثة فقط المعتمدة في المكتبة
+    # الموديلات المعتمدة والمستقرة رسمياً في المكتبة الحديثة
     candidate_models = [
         'gemini-2.0-flash',
-        'gemini-1.5-flash',
-        'gemini-1.5-flash-8b'
+        'gemini-1.5-flash'
     ]
     last_error = None
     
@@ -52,14 +51,13 @@ def generate_with_fallback(client, contents_payload):
         except Exception as e:
             last_error = e
             err_msg = str(e)
-            # إذا كان الخطأ 404 أو 429 انتقل فوراً للموديل التالي
+            # إذا كان الخطأ 404 أو 429 ننتقل للموديل الآخر تلقائياً
             if "404" in err_msg or "NOT_FOUND" in err_msg or "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                 continue
             else:
                 raise e
                 
     raise last_error
-
 
 # --- 5. تصميم ألوان حديث وجذاب ---
 st.markdown("""
@@ -160,9 +158,9 @@ if not st.session_state.user_authenticated:
                         st.success("تم تسجيل الدخول بنجاح!")
                         st.rerun()
                     else:
-                        st.error("❌ كلمة السر غير صحيحة! يرجى التأكد وإعادة المحاولة.")
+                        st.error("❌ كلمة السر غير صحيحة!")
                 else:
-                    st.error("❌ هذا الحساب غير موجود! يمكنك إنشاء حساب جديد من التبويب المجاور.")
+                    st.error("❌ هذا الحساب غير موجود!")
 
         with tab_signup:
             st.markdown("<h4 style='text-align: center; color: #38bdf8;'>إنشاء حساب جديد</h4>", unsafe_allow_html=True)
@@ -179,7 +177,7 @@ if not st.session_state.user_authenticated:
                 elif new_pass != confirm_pass:
                     st.error("❌ كلمتا السر غير متطابقتين.")
                 elif user_clean in st.session_state.users_db:
-                    st.error("❌ اسم المستخدم هذا مستعمل من قبل، اختر اسماً آخر.")
+                    st.error("❌ اسم المستخدم هذا مستعمل من قبل.")
                 else:
                     st.session_state.users_db[user_clean] = {
                         "pass": new_pass,
@@ -187,7 +185,7 @@ if not st.session_state.user_authenticated:
                     }
                     st.session_state.user_authenticated = True
                     st.session_state.current_user = user_clean
-                    st.success("✅ تم إنشاء الحساب بنجاح ودخولك للمنصة!")
+                    st.success("✅ تم إنشاء الحساب بنجاح!")
                     st.rerun()
 
 # --- 8. التطبيق الرئيسي ---
@@ -325,7 +323,7 @@ else:
                         if uploaded_images:
                             contents_payload.extend(uploaded_images)
 
-                        # تنفيذ الطلب ذكياً لتفادي أي خطأ أغطية أو حصص
+                        # استدعاء ذكي لمعالجة الأخطاء
                         response = generate_with_fallback(client, contents_payload)
 
                         st.success("✅ تم إنجاز العملية بنجاح!")
@@ -340,7 +338,7 @@ else:
 
                     except Exception as e:
                         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                            st.error("⚠️ انتهت الحصة المجانية لمفتاح Gemini الخاص بك مؤقتاً! يرجى الانتظار لمدة دقيقة واحدة وإعادة المحاولة، أو تغيير الـ API Key من القائمة الجانبية.")
+                            st.error("⚠️ الحصة المجانية للمفتاح مؤقتاً ممتلئة، يرجى الانتظار لمدة دقيقة وإعادة المحاولة.")
                         else:
                             st.error(f"حدث خطأ أثناء المعالجة: {e}")
 
